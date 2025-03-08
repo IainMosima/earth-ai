@@ -1,72 +1,72 @@
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from typing import Dict, Any, Optional, List
 
-from ..models import User
-from ..schemas import UserCreate, UserUpdate
-from ..s3_utils import delete_file_from_s3
+from app.models.user_model import User
+from app.schemas.user_schemas import UserCreate, UserUpdate
+from app.s3_utils import delete_file_from_s3
+from passlib.context import CryptContext
 
-def create_user(db: Session, user_data: UserCreate) -> User:
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_user(db: Session, user_id: int):
+    return db.query(User).filter(User.id == user_id).first()
+
+def get_user_by_email(db: Session, email: str):
+    return db.query(User).filter(User.email == email).first()
+
+def get_user_by_username(db: Session, username: str):
+    return db.query(User).filter(User.username == username).first()
+
+def get_users(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(User).offset(skip).limit(limit).all()
+
+def create_user(db: Session, user: UserCreate):
+    hashed_password = pwd_context.hash(user.password)
     db_user = User(
-        name=user_data.name,
-        email=user_data.email,
-        notification_preferences=user_data.notification_preferences
+        email=user.email,
+        username=user.username,
+        hashed_password=hashed_password,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        is_active=user.is_active
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     return db_user
 
-def get_users(db: Session, skip: int = 0, limit: int = 100) -> List[User]:
-    return db.query(User).offset(skip).limit(limit).all()
-
-def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
-    return user
-
-def get_user_by_email(db: Session, email: str) -> Optional[User]:
-    return db.query(User).filter(User.email == email).first()
-
-def update_user(db: Session, user_id: int, user_data: Dict[str, Any]) -> User:
-    user = get_user_by_id(db, user_id)
+def update_user(db: Session, user_id: int, user: UserUpdate):
+    db_user = get_user(db, user_id)
+    if not db_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
-    for key, value in user_data.items():
-        setattr(user, key, value)
+    # Update user fields that are provided
+    update_data = user.dict(exclude_unset=True)
     
-    db.commit()
-    db.refresh(user)
-    return user
-
-def delete_user(db: Session, user_id: int) -> Dict[str, bool]:
-    user = get_user_by_id(db, user_id)
+    # Hash password if it's being updated
+    if "password" in update_data:
+        update_data["hashed_password"] = pwd_context.hash(update_data.pop("password"))
     
-    # Optionally delete S3 objects
-    if user.ground_photo:
-        delete_file_from_s3(user.ground_photo)
-    if user.aerial_photo:
-        delete_file_from_s3(user.aerial_photo)
+    # Handle avatar deletion if needed
+    # This would be more complex in a real application
     
-    db.delete(user)
-    db.commit()
-    return {"success": True}
-
-def update_user_photo(db: Session, user_id: int, photo_type: str, photo_key: str) -> User:
-    user = get_user_by_id(db, user_id)
-    
-    # Delete old photo if it exists
-    if photo_type == "ground" and user.ground_photo:
-        delete_file_from_s3(user.ground_photo)
-    elif photo_type == "aerial" and user.aerial_photo:
-        delete_file_from_s3(user.aerial_photo)
-    
-    # Update with new photo
-    if photo_type == "ground":
-        user.ground_photo = photo_key
-    elif photo_type == "aerial":
-        user.aerial_photo = photo_key
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
     
     db.commit()
-    db.refresh(user)
-    return user
+    db.refresh(db_user)
+    return db_user
+
+def delete_user(db: Session, user_id: int):
+    db_user = get_user(db, user_id)
+    if not db_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    # Delete user's avatar from S3 if exists
+    if db_user.avatar_url:
+        delete_file_from_s3(db_user.avatar_url)
+    
+    db.delete(db_user)
+    db.commit()
+    return db_user

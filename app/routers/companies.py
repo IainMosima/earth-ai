@@ -1,66 +1,79 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
-import json
-import os
 
-# Add these missing imports
-from app.models.company import CompanyModel
-from app.schemas.company import Company, CompanyCreate, CompanyUpdate
-
-from app.crud import company_crud
 from app.database import get_db
+from app.models.company_model import Company
+from app.schemas.company_schemas import CompanySchema, CompanyCreate, CompanyUpdate
+from app.s3_utils import upload_file_to_s3, delete_file_from_s3
 
-router = APIRouter(
-    prefix="/companies",
-    tags=["companies"]
-)
+router = APIRouter(prefix="/companies", tags=["companies"])
 
-@router.post("/", response_model=Company)
+@router.post("/", response_model=CompanySchema)
 def create_company(company: CompanyCreate, db: Session = Depends(get_db)):
-    return company_crud.create_company(db, company)
+    db_company = Company(**company.dict())
+    db.add(db_company)
+    db.commit()
+    db.refresh(db_company)
+    return db_company
 
-@router.get("/", response_model=List[Company])
-def read_companies(status: Optional[str] = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    companies = company_crud.get_companies(db, status=status, skip=skip, limit=limit)
+@router.get("/", response_model=List[CompanySchema])
+def read_companies(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    companies = db.query(Company).offset(skip).limit(limit).all()
     return companies
 
-@router.get("/{company_id}", response_model=Company)
+@router.get("/{company_id}", response_model=CompanySchema)
 def read_company(company_id: int, db: Session = Depends(get_db)):
-    return company_crud.get_company_by_id(db, company_id)
+    db_company = db.query(Company).filter(Company.id == company_id).first()
+    if db_company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return db_company
 
-@router.patch("/{company_id}", response_model=Company)
-def update_company(company_id: int, company_data: CompanyUpdate, db: Session = Depends(get_db)):
-    # Convert Pydantic model to dict, excluding unset fields
-    update_data = company_data.dict(exclude_unset=True)
-    return company_crud.update_company(db, company_id, update_data)
-
-@router.delete("/{company_id}")
-def delete_company(company_id: int, db: Session = Depends(get_db)):
-    return company_crud.delete_company(db, company_id)
-
-def seed_companies_task(db: Session):
-    data_path = os.path.join(os.getcwd(), "data", "companies.json")
+@router.put("/{company_id}", response_model=CompanySchema)
+def update_company(company_id: int, company: CompanyUpdate, db: Session = Depends(get_db)):
+    db_company = db.query(Company).filter(Company.id == company_id).first()
+    if db_company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
     
-    try:
-        with open(data_path, 'r') as file:
-            companies_data = json.load(file)
-        
-        for company_data in companies_data:
-            # Check if company already exists by name to avoid duplicates
-            existing = db.query(CompanyModel).filter(CompanyModel.name == company_data["name"]).first()
-            if existing:
-                continue
-                
-            # Create company from data
-            create_data = CompanyCreate(**company_data)
-            company_crud.create_company(db, create_data)
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error seeding companies: {str(e)}")
+    update_data = company.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_company, key, value)
+    
+    db.commit()
+    db.refresh(db_company)
+    return db_company
 
-@router.post("/seed")
-def seed_companies(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    # Run the seeding task in the background
-    background_tasks.add_task(seed_companies_task, db)
-    return {"message": "Company seeding started in the background"}
+@router.delete("/{company_id}", response_model=CompanySchema)
+def delete_company(company_id: int, db: Session = Depends(get_db)):
+    db_company = db.query(Company).filter(Company.id == company_id).first()
+    if db_company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Delete company logo if exists
+    if db_company.logo_url:
+        delete_file_from_s3(db_company.logo_url)
+    
+    db.delete(db_company)
+    db.commit()
+    return db_company
+
+@router.post("/{company_id}/logo", response_model=CompanySchema)
+async def upload_logo(
+    company_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    db_company = db.query(Company).filter(Company.id == company_id).first()
+    if db_company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Upload file to S3
+    logo_url = await upload_file_to_s3(file, folder=f"logos/{company_id}")
+    if not logo_url:
+        raise HTTPException(status_code=500, detail="Failed to upload logo")
+    
+    # Update company with new logo URL
+    db_company.logo_url = logo_url
+    db.commit()
+    db.refresh(db_company)
+    return db_company

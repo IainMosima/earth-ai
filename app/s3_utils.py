@@ -4,6 +4,7 @@ import uuid
 from botocore.exceptions import ClientError
 from fastapi import UploadFile, HTTPException
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
 

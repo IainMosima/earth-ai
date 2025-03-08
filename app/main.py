@@ -1,28 +1,44 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import uvicorn
 import os
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
 
-# Use absolute imports
+from app.database import engine, Base, get_db, wait_for_db
 from app.routers import users, companies
-from app.database import engine, Base
 
 # Load environment variables
 load_dotenv()
 
-# Create the FastAPI app
+# Initialize FastAPI app
 app = FastAPI(
     title="Earth AI API",
-    description="API for Earth AI carbon credit platform",
-    version="1.0.0"
+    description="API for Earth AI platform",
+    version="0.1.0"
 )
 
-# Add CORS middleware
+# Create database tables
+@app.on_event("startup")
+async def startup_db_client():
+    """Initialize database connection and create tables"""
+    if wait_for_db():
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("Database tables created successfully")
+        except Exception as e:
+            print(f"Error creating database tables: {e}")
+
+# Configure CORS
+origins = [
+    "http://localhost",
+    "http://localhost:3000",  # React default
+    "http://localhost:8000",  # API itself
+    os.getenv("FRONTEND_URL", "")  # From environment variables
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust this in production to specific origins
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,14 +47,6 @@ app.add_middleware(
 # Include routers
 app.include_router(users.router)
 app.include_router(companies.router)
-
-# Exception handlers
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"message": f"An unexpected error occurred: {str(exc)}"},
-    )
 
 @app.get("/")
 def read_root():
