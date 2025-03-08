@@ -12,11 +12,12 @@ router = APIRouter()
 @router.post("/s3-upload-complete")
 async def s3_upload_complete(payload: S3Callback, db: Session = Depends(get_db)):
     try:
-        key = payload.get("key")
         user_id = payload.get("userId")
-        
-        if not key or not user_id:
-            raise HTTPException(status_code=400, detail="Missing required fields")
+        ground_photo_url = payload.get("ground_photo_url")
+        ground_photo_key = payload.get("ground_photo_key")
+        aerial_photo_url = payload.get("aerial_photo_url")
+        aerial_photo_key = payload.get("aerial_photo_key")
+        created_at = payload.get("created_at")
         
         # Find the user
         user = db.query(User).filter(User.id == user_id).first()
@@ -26,10 +27,10 @@ async def s3_upload_complete(payload: S3Callback, db: Session = Depends(get_db))
         bucket_name = os.getenv('S3_BUCKET_NAME')
         
         # Update user record based on which photo was uploaded
-        if "ground_photo" in key:
-            user.ground_photo = key
-        elif "aerial_photo" in key:
-            user.aerial_photo = key
+        if ground_photo_url or ground_photo_key:
+            user.ground_photo = ground_photo_url
+        elif aerial_photo_url or aerial_photo_key:
+            user.aerial_photo = aerial_photo_url
         
         # Check if registration is now complete
         # if user.ground_photo_url and user.aerial_photo_url:

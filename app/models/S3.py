@@ -6,11 +6,12 @@ from datetime import datetime, timezone
 from app.utils.Enums import ImageTypeEnum
 
 class S3Callback(BaseModel):
-    """
-    Model for S3 upload completion callback data
-    """
-    key: str
     userId: str
+    ground_photo_url: str
+    ground_photo_key: str
+    aerial_photo_url: str
+    aerial_photo_key: str
+    created_at: datetime
     # image_type: Optional[ImageTypeEnum]
     
 
@@ -19,10 +20,10 @@ class SignedUrlsResponse(BaseModel):
     Response model for signed URLs generation
     """
     user_id: int  # Add this missing required field
-    ground_photo_url: str
-    ground_photo_key: str
-    aerial_photo_url: str
-    aerial_photo_key: str
+    ground_photo_url: Optional[str]
+    ground_photo_key: Optional[str]
+    aerial_photo_url: Optional[str]
+    aerial_photo_key: Optional[str]
     created_at: datetime
 
     @classmethod
