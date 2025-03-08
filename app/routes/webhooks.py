@@ -7,7 +7,7 @@ from app.models.S3 import S3Callback
 from app.models.user_model import User
 from app.services.email_service import email_service
 
-router = APIRouter(tags=["webhooks"])
+router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 @router.post("/s3-upload-complete")
 async def s3_upload_complete(payload: S3Callback, db: Session = Depends(get_db)):
