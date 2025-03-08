@@ -32,14 +32,52 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-# Dependency to get a database session
+# Context manager for use in regular Python code
 @contextmanager
 def get_db():
+    """Context manager for database sessions.
+    Use with 'with' statement:
+    
+    Example:
+        with get_db() as db:
+            users = db.query(User).all()
+    """
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+# FastAPI dependency that yields a database session
+def get_db_session():
+    """FastAPI dependency that provides a database session.
+    Use with FastAPI Depends():
+    
+    Example:
+        @app.get("/users/")
+        def read_users(db: Session = Depends(get_db_session)):
+            users = db.query(User).all()
+            return users
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+        
+def get_db_direct():
+    """Returns a database session directly.
+    Use when you need a session object without context management.
+    Remember to close the session when done.
+    
+    Example:
+        db = get_db_direct()
+        try:
+            users = db.query(User).all()
+        finally:
+            db.close()
+    """
+    return SessionLocal()
 
 def wait_for_db(retries=5, delay=2):
     """Attempts to connect to the database with retries"""

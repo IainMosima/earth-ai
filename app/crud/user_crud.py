@@ -1,10 +1,10 @@
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile, status
 from typing import Dict, Any, Optional, List
 
 from app.models.user_model import User
 from app.schemas.user_schemas import UserCreate, UserUpdate
-from app.s3_utils import delete_file_from_s3
+from app.s3_utils import delete_file_from_s3, upload_file_to_s3
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -21,20 +21,43 @@ def get_user_by_username(db: Session, username: str):
 def get_users(db: Session, skip: int = 0, limit: int = 100):
     return db.query(User).offset(skip).limit(limit).all()
 
-def create_user(db: Session, user: UserCreate):
-    hashed_password = pwd_context.hash(user.password)
-    db_user = User(
-        email=user.email,
-        username=user.username,
-        hashed_password=hashed_password,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        is_active=user.is_active
+async def create_user(
+    db: Session,
+    user_data: UserCreate,
+    
+) -> User:
+    # Upload ground photo to S3
+    print("Here")
+    ground_photo_result = await upload_file_to_s3(
+        user_data.ground_photo,
+        folder="user-ground-photos"
     )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+    
+    # Upload aerial photo to S3
+    aerial_photo_result = await upload_file_to_s3(
+        user_data.aerial_photo,
+        folder="user-aerial-photos"
+    )
+    
+    # Create new user with S3 keys
+    db_user = User(
+        email=user_data.email,
+        username=user_data.username,
+        ground_photo_key=ground_photo_result["key"],
+        aerial_photo_key=aerial_photo_result["key"]
+    )
+    
+    try:
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        return db_user
+    except Exception as e:
+        # If database operation fails, cleanup S3 uploaded files
+        from app.s3_utils import delete_file_from_s3
+        delete_file_from_s3(ground_photo_result["key"])
+        delete_file_from_s3(aerial_photo_result["key"])
+        raise HTTPException(status_code=500, detail=str(e))
 
 def update_user(db: Session, user_id: int, user: UserUpdate):
     db_user = get_user(db, user_id)
