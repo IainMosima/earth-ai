@@ -46,17 +46,21 @@ async def validate_image(file: UploadFile):
 async def upload_file_to_s3(file: UploadFile, folder: str = "uploads"):
     """
     Upload a file to S3 bucket
-    Returns the S3 object key/path
+    Returns the S3 object key/path without any spaces
     """
     # First, validate the file
     await validate_image(file)
     
     # Generate a unique filename to prevent overwrites
-    file_extension = file.filename.split('.')[-1]
+    file_extension = file.filename.split('.')[-1].strip()
     unique_filename = f"{uuid.uuid4()}.{file_extension}"
     
-    # Construct the S3 object key (path)
-    object_key = f"{folder}/{unique_filename}"
+    # Sanitize folder name (replace spaces with underscores)
+    sanitized_folder = folder.replace(' ', '_').strip()
+    
+    # Construct the S3 object key (path) without spaces
+    object_key = f"{sanitized_folder}/{unique_filename}"
+    object_key = object_key.replace(' ', '_')  # Extra protection against any spaces
     
     try:
         # Read file content

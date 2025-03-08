@@ -4,11 +4,11 @@ from datetime import datetime
 
 # User schemas
 class UserBase(BaseModel):
-    name: str
     email: EmailStr
+    username: str
 
 class UserCreate(UserBase):
-    notification_preferences: Optional[Dict[str, bool]] = {}
+    # notification_preferences: Optional[Dict[str, bool]] = {}
     
 class UserUpdate(BaseModel):
     name: Optional[str] = None

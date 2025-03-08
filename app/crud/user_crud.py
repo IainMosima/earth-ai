@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile, status
 from typing import Dict, Any, Optional, List
-
+import os
 from app.models.user_model import User
 from app.schemas.user_schemas import UserCreate, UserUpdate
 from app.s3_utils import delete_file_from_s3, upload_file_to_s3
@@ -23,28 +23,13 @@ def get_users(db: Session, skip: int = 0, limit: int = 100):
 
 async def create_user(
     db: Session,
-    user_data: UserCreate,
-    
+    user_data: Dict[str, Any]
 ) -> User:
-    # Upload ground photo to S3
-    print("Here")
-    ground_photo_result = await upload_file_to_s3(
-        user_data.ground_photo,
-        folder="user-ground-photos"
-    )
-    
-    # Upload aerial photo to S3
-    aerial_photo_result = await upload_file_to_s3(
-        user_data.aerial_photo,
-        folder="user-aerial-photos"
-    )
-    
-    # Create new user with S3 keys
+    # Create new user with photo paths
     db_user = User(
-        email=user_data.email,
-        username=user_data.username,
-        ground_photo_key=ground_photo_result["key"],
-        aerial_photo_key=aerial_photo_result["key"]
+        email=user_data["email"],
+        username=user_data["username"],
+        avatar_url=user_data.get("avatar_url", "")
     )
     
     try:
@@ -53,10 +38,11 @@ async def create_user(
         db.refresh(db_user)
         return db_user
     except Exception as e:
-        # If database operation fails, cleanup S3 uploaded files
-        from app.s3_utils import delete_file_from_s3
-        delete_file_from_s3(ground_photo_result["key"])
-        delete_file_from_s3(aerial_photo_result["key"])
+        # If database operation fails, cleanup uploaded files
+        if os.path.exists(ground_photo_path):
+            os.remove(ground_photo_path)
+        if os.path.exists(aerial_photo_path):
+            os.remove(aerial_photo_path)
         raise HTTPException(status_code=500, detail=str(e))
 
 def update_user(db: Session, user_id: int, user: UserUpdate):
