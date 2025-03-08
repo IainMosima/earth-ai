@@ -3,13 +3,14 @@ from typing import Dict
 import os
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.models.S3 import S3Callback
 from app.models.user_model import User
 from app.services.email_service import email_service
 
 router = APIRouter()
 
 @router.post("/s3-upload-complete")
-async def s3_upload_complete(payload: Dict = Body(...), db: Session = Depends(get_db)):
+async def s3_upload_complete(payload: S3Callback, db: Session = Depends(get_db)):
     try:
         key = payload.get("key")
         user_id = payload.get("userId")
@@ -26,19 +27,21 @@ async def s3_upload_complete(payload: Dict = Body(...), db: Session = Depends(ge
         
         # Update user record based on which photo was uploaded
         if "ground_photo" in key:
-            user.ground_photo_url = f"https://{bucket_name}.s3.amazonaws.com/{key}"
+            user.ground_photo = key
         elif "aerial_photo" in key:
-            user.aerial_photo_url = f"https://{bucket_name}.s3.amazonaws.com/{key}"
+            user.aerial_photo = key
         
-        # # Check if registration is now complete
+        # Check if registration is now complete
         # if user.ground_photo_url and user.aerial_photo_url:
         #     user.registration_complete = True
         #     # Send completion email
         #     await email_service.send_registration_completion_email(user.email)
         
-        # db.commit()
+        db.commit()
         
-        return {"message": "Upload processed successfully"}
+        return {
+            "message": f"User {user_id} ({user.name}) has completed uploading"
+        }
     except Exception as e:
         print(f"Upload webhook error: {str(e)}")
         raise HTTPException(status_code=500, detail="Server error processing upload")

@@ -7,4 +7,12 @@ class VerificationStatusEnum(Enum):
 
 default_status = VerificationStatusEnum.PENDING
 
-__all__ = ['VerificationStatusEnum', 'default_status']
+class ImageTypeEnum(Enum):
+    GROUNDPHOTO = "GroundPhoto"
+    AERIALPHOTO = "AerialPhoto"
+
+__all__ = [
+    'VerificationStatusEnum',
+    'default_status',
+    'ImageTypeEnum'
+]

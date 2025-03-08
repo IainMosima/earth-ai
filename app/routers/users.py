@@ -5,8 +5,11 @@ import shutil
 
 from app.database import get_db
 from app.crud import user_crud
-from app.schemas.user_schemas import UserSchema, UserCreate, UserUpdate
+# from app.schemas.user_schemas import UserSchema, UserCreate, UserUpdate
 import os
+
+from app.models.user import UserDB, UserResponseCreation
+from app.models.user_model import User
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -15,7 +18,7 @@ UPLOAD_DIR = "uploads/"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-@router.post("/", response_model=UserSchema)
+@router.post("/", response_model=UserResponseCreation)
 async def create_user(
     email: str = Form(...),
     username: str = Form(...),
@@ -67,7 +70,21 @@ async def create_user(
             user = await user_crud.create_user(db=session, user_data=user_data)
             
             # Make sure we're returning the actual user object, not a coroutine
-            return user
+            return UserResponseCreation(
+                id=user.id,
+                email=user.email,
+                username=user.username,
+                avatar_url=user.avatar_url,
+                carbon_score=0,
+                potential_earnings=None,
+                interested_companies=0,
+                verification_status="Pending",
+                notification_preferences={},
+                carbon_journey=None,
+                is_verified=False,
+                created_at=user.created_at,
+                updated_at=user.updated_at
+                )
         
         except Exception as e:
             # Clean up any partially created files in case of error
@@ -79,23 +96,23 @@ async def create_user(
                 detail=f"Failed to create user: {str(e)}"
             )
 
-@router.get("/", response_model=List[UserSchema])
+@router.get("/", response_model=List[User])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     users = user_crud.get_users(db, skip=skip, limit=limit)
     return users
 
-@router.get("/{user_id}", response_model=UserSchema)
+@router.get("/{user_id}", response_model=User)
 def read_user(user_id: int, db: Session = Depends(get_db)):
     db_user = user_crud.get_user(db, user_id=user_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
 
-@router.put("/{user_id}", response_model=UserSchema)
-def update_user(user_id: int, user: UserUpdate, db: Session = Depends(get_db)):
+@router.put("/{user_id}", response_model=User)
+def update_user(user_id: int, user: User, db: Session = Depends(get_db)):
     return user_crud.update_user(db=db, user_id=user_id, user=user)
 
-@router.delete("/{user_id}", response_model=UserSchema)
+@router.delete("/{user_id}", response_model=User)
 def delete_user(user_id: int, db: Session = Depends(get_db)):
     return user_crud.delete_user(db=db, user_id=user_id)
 

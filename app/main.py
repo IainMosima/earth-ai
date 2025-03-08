@@ -58,21 +58,26 @@ app.add_middleware(
 # Configure custom middleware for large file uploads
 @app.middleware("http")
 async def custom_upload_middleware(request: Request, call_next):
+    # Use environment variables for upload limits with fallback values
+    max_upload_size = int(os.getenv("MAX_UPLOAD_SIZE", 104857600))  # From .env: 100MB
+    chunk_size = int(os.getenv("CHUNK_SIZE", 1048576))  # From .env: 1MB
+    boundary_buffer = int(os.getenv("BOUNDARY_BUFFER_SIZE", 102400))  # From .env: 100KB
+    
     # Increase upload limits
-    request.scope["max_upload_size"] = 100 * 1024 * 1024  # 100MB
+    request.scope["max_upload_size"] = max_upload_size
     request.scope["max_form_parts"] = 1000
-    request.scope["max_form_field_size"] = 10 * 1024 * 1024  # 10MB per field
+    request.scope["max_form_field_size"] = chunk_size
     
     # Increase boundary buffer
     if "content-type" in request.headers:
-        request.scope["_boundary_buffer_size"] = 100 * 1024  # 100KB boundary buffer
+        request.scope["_boundary_buffer_size"] = boundary_buffer
     
     response = await call_next(request)
     return response
 
 # Include routers
 app.include_router(users.router, tags=["users"])
-app.include_router(companies.router)
+# app.include_router(companies.router)
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
 
 @app.get("/")
