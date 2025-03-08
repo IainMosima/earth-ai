@@ -10,6 +10,10 @@ from datetime import datetime
 from bson import ObjectId
 from pydantic import BaseModel
 
+from datetime import datetime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from app.database import Base
+
 class PyObjectId(str):
     @classmethod
     def __get_validators__(cls):
@@ -26,7 +30,9 @@ class UserBase(BaseModel):
     username: str
     
 class UserCreate(UserBase):
-    pass
+    avatar_url: Optional[str] = None
+    
+    
 
 class UserDB(UserBase):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
@@ -34,40 +40,34 @@ class UserDB(UserBase):
     aerial_photo_url: Optional[str] = None
     registration_complete: bool = False
     
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {
-            ObjectId: str
-        }
-        schema_extra = {
-            "example": {
-                "_id": "60d21b4967d0d1992e610c85",
-                "email": "user@example.com",
-                "ground_photo_url": None,
-                "aerial_photo_url": None,
-                "registration_complete": False
-            }
-        }
+class UserResponseCreation(BaseModel):
+    id: int
+    email: str
+    username: str
+    upload_urls: Optional[dict] = []
+    avatar_url: Optional[str] = None
+    carbon_score: float = 0
+    potential_earnings: Optional[str] = None
+    interested_companies: int = 0
+    verification_status: str = "Pending"
+    notification_preferences: dict = {}
+    carbon_journey: Optional[dict] = None
+    is_verified: bool = False
+    created_at: datetime
+    updated_at: datetime
 
 class UserResponse(BaseModel):
-    id: str
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    email: str
     username: str
-    email: EmailStr
-    registration_complete: bool
-
-class UserCreate(BaseModel):
-    email: EmailStr
-    username: str
-
-# class User(Base):
-#     __tablename__ = "users"
-    
-#     id = Column(Integer, primary_key=True, index=True)
-#     email = Column(String, unique=True, index=True)
-#     username = Column(String, unique=True, index=True)
-#     ground_photo_url = Column(String, nullable=True)
-#     aerial_photo_url = Column(String, nullable=True)
-#     registration_complete = Column(Boolean, default=False)
-#     created_at = Column(DateTime(timezone=True), server_default=func.now())
-#     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    ground_photo: Optional[str] = None
+    aerial_photo: Optional[str] = None
+    avatar_url: Optional[str] = None
+    potential_earnings: Optional[str] = None
+    interested_companies: int = 0
+    verification_status: str = "Pending"
+    notification_preferences: dict = {}
+    carbon_journey: Optional[dict] = None
+    is_verified: bool = False
+    created_at: datetime
+    updated_at: datetime

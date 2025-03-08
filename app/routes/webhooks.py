@@ -30,13 +30,13 @@ async def s3_upload_complete(payload: Dict = Body(...), db: Session = Depends(ge
         elif "aerial_photo" in key:
             user.aerial_photo_url = f"https://{bucket_name}.s3.amazonaws.com/{key}"
         
-        # Check if registration is now complete
-        if user.ground_photo_url and user.aerial_photo_url:
-            user.registration_complete = True
-            # Send completion email
-            await email_service.send_registration_completion_email(user.email)
+        # # Check if registration is now complete
+        # if user.ground_photo_url and user.aerial_photo_url:
+        #     user.registration_complete = True
+        #     # Send completion email
+        #     await email_service.send_registration_completion_email(user.email)
         
-        db.commit()
+        # db.commit()
         
         return {"message": "Upload processed successfully"}
     except Exception as e:

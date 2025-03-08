@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, JSON, 
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from datetime import datetime
 from typing import Optional
 
@@ -13,11 +13,21 @@ class UserBase(BaseModel):
 
 class UserResponse(UserBase):
     id: int
-    registration_complete: bool = False
     ground_photo: Optional[str] = None
     aerial_photo: Optional[str] = None
+    is_verified: bool = False
     created_at: Optional[datetime] = None
 
+
+
+class UserResponseCreation(BaseModel):
+    id: str
+    email: str
+    name: str
+    role: str
+    created_at: str
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class User(Base):
     __tablename__ = "users"

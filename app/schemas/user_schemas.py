@@ -19,13 +19,13 @@ class UserCreate(BaseModel):
             }
         }
 
-class UserResponse(UserBase):
-    id: int
-    registration_complete: bool
-    ground_photo_url: Optional[str] = None
-    aerial_photo_url: Optional[str] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+# class UserResponse(UserBase):
+#     id: int
+#     registration_complete: bool
+#     ground_photo_url: Optional[str] = None
+#     aerial_photo_url: Optional[str] = None
+#     created_at: datetime
+#     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+#     class Config:
+#         from_attributes = True

@@ -2,16 +2,16 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import Dict, Any
-from app.database import get_db_session  # <-- Change this
+from app.database import get_db_session
 from app.services.email_service import email_service
-from app.models.user_model import UserResponse, User
-from app.schemas.user_schemas import UserCreate
 from app.services.storage_service import storage_service
+from app.models.user import UserResponseCreation, UserResponse, UserCreate
+from app.models.user_model import User
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
-@router.post("/register", response_model=UserResponse)
-async def register_user(user_data: UserCreate, db: Session = Depends(get_db_session)):  # <-- Use get_db_session here
+@router.post("/register", response_model=UserResponseCreation)
+async def register_user(user_data: UserCreate, db: Session = Depends(get_db_session)):  
     try:
         email = user_data.email
         username = user_data.username
@@ -43,12 +43,14 @@ async def register_user(user_data: UserCreate, db: Session = Depends(get_db_sess
             urls = await storage_service.generate_signed_urls(str(user.id))
             
             # Return successful response
-            return {
-                "status": "success",
-                "message": "Registration successful",
-                "user_id": user.id,
-                "upload_urls": urls
-            }
+            return UserResponseCreation(
+                id=user.id,
+                email=user.email,
+                username=user.username,
+                upload_urls=urls,
+                is_verified=user.is_verified,
+                created_at=user.created_at
+            )
         except Exception as e:
             # Cleanup on failure
             db.delete(user)
