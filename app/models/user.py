@@ -57,7 +57,21 @@ class User(BaseModel):
     is_verified: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    username: Optional[str] = None
+    ground_photo: Optional[str] = None
+    aerial_photo: Optional[str] = None
+    avatar_url: Optional[str] = None
+    carbon_score: Optional[float] = None
+    potential_earnings: Optional[str] = None
+    interested_companies: Optional[int] = None
+    verification_status: Optional[VerificationStatusEnum] = None
+    notification_preferences: Optional[Dict[str, Any]] = None
+    carbon_journey: Optional[Dict[str, Any]] = None
+    is_verified: Optional[bool] = None
+
 class UserResponseCreation(BaseModel):
     id: int
     email: str

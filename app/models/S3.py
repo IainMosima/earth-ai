@@ -6,12 +6,12 @@ from datetime import datetime, timezone
 from app.utils.Enums import ImageTypeEnum
 
 class S3Callback(BaseModel):
-    userId: str
-    ground_photo_url: str
-    ground_photo_key: str
-    aerial_photo_url: str
-    aerial_photo_key: str
-    created_at: datetime
+    user_id: int
+    ground_photo_url: Optional[str] 
+    ground_photo_key: Optional[str]
+    aerial_photo_url: Optional[str]
+    aerial_photo_key: Optional[str]
+    created_at: datetime = datetime.now(timezone.utc)
     # image_type: Optional[ImageTypeEnum]
     
 
@@ -43,7 +43,6 @@ class S3SignedURLs(BaseModel):
     """
     ground_photo_signed: str
     aerial_photo_signed: str
-    # Add missing attributes that are expected by the consuming code
     ground_photo_url: str
     ground_photo_key: str
     aerial_photo_url: str
