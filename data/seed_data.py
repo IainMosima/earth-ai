@@ -1,4 +1,4 @@
-campanies = [
+companies = [
   {
     "name": "EarthFirst Enterprises",
     "tagline": "Putting the planet first in everything we do",

@@ -9,7 +9,6 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 import shutil
 
 from app.database import engine, Base, get_db, wait_for_db
-from app.routers import companies
 from app.routes import webhooks, users
 import uvicorn
 
@@ -76,9 +75,8 @@ async def custom_upload_middleware(request: Request, call_next):
     return response
 
 # Include routers
-app.include_router(users.router, tags=["users"])
-# app.include_router(companies.router)
-app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
+app.include_router(users.router)  # No need to specify tags as they're already set in the router
+app.include_router(webhooks.router)
 
 @app.get("/")
 async def root():
