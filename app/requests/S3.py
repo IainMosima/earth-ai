@@ -7,6 +7,8 @@ from pydantic import BaseModel
 class SignedUrlsResponse(BaseModel):
     ground_photo_signed_url: Optional[str]
     aerial_photo_signed_url: Optional[str]
+    ground_photo_key: Optional[str]
+    aerial_photo_key: Optional[str]
 
     @classmethod
     def from_dict(cls, data: dict):

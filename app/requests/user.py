@@ -48,4 +48,5 @@ class UserUpdate(BaseModel):
     carbon_journey: Optional[Dict[str, Any]] = None
     is_verified: Optional[bool] = None
     is_active: Optional[bool] = None
+    verification_thread_id: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -1,12 +1,11 @@
 import logging
 import os
-from typing import Union
 
 import httpx
 from langgraph_sdk import get_client
 
-from app.requests import AIRequest, AerialResultOutput
-from app.requests.ai import AIResponse
+from app.requests import AIRequest
+from app.requests.ai import AIResponse, AerialResult
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger("ai-engine")
 
 
-class AIService:
+class AIEngine:
     client = get_client(
         url=os.environ.get("LANGGRAPH_URL", "http://localhost:8123"),
         api_key=os.environ.get("LANGGRAPH_API_KEY")
@@ -47,7 +46,7 @@ class AIService:
             raise error
 
     @classmethod
-    async def get_complete_response(cls, thread_id: str, message) -> AIResponse:
+    async def send_and_get_id(cls, thread_id: str, message) -> str:
         """
         Get a complete response from the assistant without streaming.
         Waits for the full response before returning.
@@ -65,17 +64,13 @@ class AIService:
                 thread = await cls.create_thread()
                 thread_id = thread["thread_id"]
 
-            # Create a run and wait for it to complete
-            run = await cls.client.runs.create(
+            await cls.client.runs.create(
                 thread_id,
                 assistant["assistant_id"],
                 input=message
             )
 
-            # Wait for the run to complete
-            run = await cls.client.runs.wait(thread_id, run["run_id"])
-            print("Completed run:", run)
-            return run
+            return thread_id
 
             # Rest of your existing code...
         except httpx.HTTPStatusError as error:
@@ -88,60 +83,55 @@ class AIService:
             raise error
 
     @classmethod
-    async def send_message(cls, message: AIRequest) -> Union[AerialResultOutput, str]:
+    async def send_message(cls, message: AIRequest) -> str:
         """
         Create a new thread and send a message, returning the complete response.
         """
         try:
             thread = await cls.create_thread()
-            chat_message = await cls.get_complete_response(thread["thread_id"], message)
+            sent_thread_id = await cls.send_and_get_id(thread["thread_id"], message)
 
-            if cls.is_thread_busy(thread["thread_id"]):
-                return "Thread is busy. Please try again later."
-            else:
-                # Convert the chat message to AerialResultOutput
-                return AerialResultOutput(
-                    content=chat_message.text,  # Assuming text is the content of the response
-                    additional_kwargs={},  # You may populate this based on the response
-                    response_metadata={},  # Similar for this field if needed
-                    type="ai",  # Or another value depending on your logic
-                    name=chat_message.text,  # Set name as the content or another identifier
-                    id=thread.thread_id,  # Generate or extract an ID as needed
-                    example=False,  # Set as needed
-                    tool_calls=[],  # Populate this if necessary
-                    invalid_tool_calls=[],  # Populate if necessary
-                    usage_metadata=None  # Set this as per your logic
-                )
+            return sent_thread_id
         except Exception as error:
             print(f"Error sending message: {error}")
             raise error
 
     @classmethod
-    async def is_thread_busy(cls, thread_id: str) -> bool:
+    async def get_thread_info(cls, thread_id: str):
         try:
-            # Get all runs for the thread
-            runs = await cls.list_runs(thread_id)
+            # Get the thread information
+            thread_response = await cls.client.threads.get(thread_id)
 
-            # Check if any runs are in active states (queued, in_progress)
-            active_states = ["queued", "in_progress", "requires_action"]
-            active_runs = [run for run in runs if run.get("status") in active_states]
 
-            return len(active_runs) > 0
+            values = thread_response.get("values")
+
+            # Extract aerial_result data
+            aerial_result_input = values.get("aerial_result").get("input")
+
+            aerial_result_output = values.get("aerial_result").get("output")
+
+
+            # Combine the information into a single response
+            thread_info = AIResponse(
+            user_id=values.get("user_id"),
+            aerial_result=AerialResult(
+                input=aerial_result_input,
+                output=aerial_result_output,
+            ),
+            carbon_credits=values.get("carbon_credits"),
+            )
+
+            return thread_info
         except Exception as error:
-            # Log the error but don't raise it - return True as a safety measure
-            # This way, if we can't check status, we assume it might be busy
-            logger.error(f"Error checking thread status: {error}")
-            return True
+            logger.error(f"Error retrieving thread information: {error}")
+            raise error
 
-
-class AIInputData:
-    pass
-
+ai_engine = AIEngine()
 
 # Example of how to use with send_message (assuming it's from ai_engine.py)
 async def test_send_message():
     # Initialize AI service
-    ai_service = AIService()
+    ai_service = AIEngine()
 
     # Create a message using the test data
     message = AIRequest(
@@ -155,5 +145,11 @@ async def test_send_message():
         message=message
     )
 
-    print("Response received from ai:", response)
+    print("new thread id from ai:", response)
     return response
+
+async def check_thread_status(thread_id):
+    ai_service = AIEngine()
+    thread_info = await ai_service.get_thread_info(thread_id)
+    print(thread_info)
+    return thread_info

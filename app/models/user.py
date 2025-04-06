@@ -42,6 +42,7 @@ class UserBaseDB(BaseModel):
     carbon_journey: Optional[Dict[str, Any]] = None,
     created_at: datetime = Field(default_factory=datetime.utcnow)
     is_verified: bool = False
+    verification_thread_id: Optional[str] = None
     is_active: bool = True
 
 

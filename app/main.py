@@ -9,7 +9,7 @@ from starlette.requests import Request
 import logging
 import asyncio
 
-from app.infrastructure import test_send_message
+from app.infrastructure import test_send_message, check_thread_status
 from app.routers import users
 from app.db import connect_to_mongo, close_mongo_connection
 
@@ -37,7 +37,9 @@ app = FastAPI(
 async def startup_db_client():
     logger.info("🚀 Starting application...")
 
-    await test_send_message()
+    # await test_send_message()
+
+    # await check_thread_status("5830202f-0b85-404a-bd37-91a8bad91750")
 
     connection_successful = await connect_to_mongo()
 

@@ -23,8 +23,8 @@ class AerialResultOutput(BaseModel):
 
 
 class AerialResult(BaseModel):
-    input: Dict[str, str]
-    output: AerialResultOutput
+    input: str
+    output: str
 
 # Response
 class AIResponse(BaseModel):

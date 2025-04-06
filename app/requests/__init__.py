@@ -1,3 +1,3 @@
-from app.requests.ai import AIRequest, AerialResultOutput
+from app.requests.ai import AIRequest, AerialResultOutput, AerialResult
 
-__all__=["AIRequest","AerialResultOutput"]
+__all__=["AIRequest","AerialResultOutput", "AerialResult"]
