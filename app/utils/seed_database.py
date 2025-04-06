@@ -1,7 +1,7 @@
 import logging
 
 from app.models import Company
-from data.seed_data import companies
+from scripts.data.seed_data import companies
 
 logger = logging.getLogger(__name__)
 

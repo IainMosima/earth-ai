@@ -1,136 +1,151 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from datetime import datetime
+
+from fastapi import APIRouter, HTTPException, Depends, Path
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
-import shutil
+from typing import Optional, List
 
-from app.database import get_db
-from app.crud import user_crud
-# from app.schemas.user_schemas import UserSchema, UserCreate, UserUpdate
-import os
+from app.services.storage_service import storage_service
+from app.requests.user import UserResponseCreation, UserResponse, UserCreate, UserUpdate
+from app.db.user_repository import create_user, get_user_by_email, update_user, get_user, get_users, delete_user
 
-from app.models.user import UserDB, UserResponseCreation
-from app.models.user_model import User
+router = APIRouter(tags=["users"])
 
-router = APIRouter(prefix="/users", tags=["users"])
 
-UPLOAD_DIR = "uploads/"
-
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
-
-@router.post("/", response_model=UserResponseCreation)
-async def create_user(
-    email: str = Form(...),
-    username: str = Form(...),
-    ground_photo: UploadFile = File(None),  # Make file optional to help debug
-    aerial_photo: UploadFile = File(None),  # Make file optional to help debug
-    avatar_url: str = Form(""),  # Default empty string instead of None
-    db: Session = Depends(get_db),
+# Make sure we have both prefixes covered
+@router.post("/api/users/register", response_model=UserResponseCreation)
+async def register_user(
+        user: UserCreate
 ):
-    # Use the db session correctly by entering the context manager
-    with db as session:
-        # Check for existing user
-        if user_crud.get_user_by_email(session, email=email):
-            raise HTTPException(status_code=400, detail="Email already registered")
-        if user_crud.get_user_by_username(session, username=username):
-            raise HTTPException(status_code=400, detail="Username already taken")
+    try:
+        existing_user = await get_user_by_email(user.email)
 
-        try:
-            ground_photo_path = ""
-            aerial_photo_path = ""
-            
-            # Save ground photo if provided
-            if ground_photo:
-                ground_photo_path = os.path.join(UPLOAD_DIR, f"ground_{username}_{ground_photo.filename}")
-                with open(ground_photo_path, "wb") as buffer:
-                    contents = ground_photo.file.read()
-                    buffer.write(contents)
-                ground_photo.file.close()
-            
-            # Save aerial photo if provided
-            if aerial_photo:
-                aerial_photo_path = os.path.join(UPLOAD_DIR, f"aerial_{username}_{aerial_photo.filename}")
-                with open(aerial_photo_path, "wb") as buffer:
-                    contents = aerial_photo.file.read()
-                    buffer.write(contents)
-                aerial_photo.file.close()
-            
-            # Create user in DB
-            user_data = {
-                "email": email,
-                "username": username,
-                "ground_photo": ground_photo_path,
-                "aerial_photo": aerial_photo_path,
-                "avatar_url": avatar_url,
-            }
-
-            # If user_crud.create_user is async, add await:
-            # user = await user_crud.create_user(db=session, user_data=user_data)
-            # Otherwise, keep as is:
-            user = await user_crud.create_user(db=session, user_data=user_data)
-            
-            # Make sure we're returning the actual user object, not a coroutine
-            return UserResponseCreation(
-                id=user.id,
-                email=user.email,
-                username=user.username,
-                avatar_url=user.avatar_url,
-                carbon_score=0,
-                potential_earnings=None,
-                interested_companies=0,
-                verification_status="Pending",
-                notification_preferences={},
-                carbon_journey=None,
-                is_verified=False,
-                created_at=user.created_at,
-                updated_at=user.updated_at
-                )
-        
-        except Exception as e:
-            # Clean up any partially created files in case of error
-            for path in [ground_photo_path, aerial_photo_path]:
-                if path and os.path.exists(path):
-                    os.remove(path)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to create user: {str(e)}"
+        if existing_user:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "message": "User already exists"
+                }
             )
 
-@router.get("/", response_model=List[User])
-def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    users = user_crud.get_users(db, skip=skip, limit=limit)
+        user_dict = UserCreate(
+            email=user.email,
+            username=user.username,
+            avatar_url=user.avatar_url,
+        )
+
+        # Create user
+        created_user = await create_user(user_dict)
+
+        # Generate signed URLs for photo uploads
+        try:
+            signed_urls = await storage_service.generate_signed_urls(str(created_user["id"]), user.ground_photo_content_type, user.aerial_photo_content_type)
+            print("signed urls", signed_urls)
+            # Convert the SignedUrlsResponse to a dictionary
+
+            # Return successful response
+            return UserResponseCreation(
+                id=str(created_user["id"]),
+                email=created_user["email"],
+                name=created_user["username"],
+                created_at=str(created_user["created_at"]),
+                upload_urls=signed_urls
+            )
+
+        except Exception as e:
+            # Cleanup on failure
+            await delete_user(created_user["id"])
+            raise HTTPException(status_code=500, detail=f"Failed to generate upload URLs: {str(e)}")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
+
+
+@router.get("/api/users", response_model=List[UserResponse])
+@router.get("/users/", response_model=List[UserResponse])
+async def read_users(skip: int = 0, limit: int = 100):
+    users = get_users(skip=skip, limit=limit)
     return users
 
-@router.get("/{user_id}", response_model=User)
-def read_user(user_id: int, db: Session = Depends(get_db)):
-    db_user = user_crud.get_user(db, user_id=user_id)
+
+@router.get("/api/users/{user_id}", response_model=UserResponse)
+@router.get("/users/{user_id}", response_model=UserResponse)
+async def read_user(user_id: str):
+    db_user = get_user(user_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
 
-@router.put("/{user_id}", response_model=User)
-def update_user(user_id: int, user: User, db: Session = Depends(get_db)):
-    return user_crud.update_user(db=db, user_id=user_id, user=user)
 
-@router.delete("/{user_id}", response_model=User)
-def delete_user(user_id: int, db: Session = Depends(get_db)):
-    return user_crud.delete_user(db=db, user_id=user_id)
+@router.put("/api/users/{user_id}", response_model=UserResponse)
+@router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user_endpoint(
+        user_id: str = Path(..., title="The ID of the user to update"),
+        user_data: UserUpdate = None
+):
+    """
+    Update a user's information.
+    This can be used to update any user fields, including photo URLs.
+    """
+    try:
+        # Check if the user exists
+        existing_user = get_user(user_id)
+        if not existing_user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-# @router.post("/{user_id}/avatar", response_model=UserSchema)
-# async def upload_avatar(
-#     user_id: int,
-#     file: UploadFile = File(...),
-#     db: Session = Depends(get_db)
-# ):
-#     db_user = user_crud.get_user(db, user_id=user_id)
-#     if db_user is None:
-#         raise HTTPException(status_code=404, detail="User not found")
-    
-#     # Upload file to S3
-#     avatar_url = await upload_file_to_s3(file, folder=f"avatars/{user_id}")
-#     if not avatar_url:
-#         raise HTTPException(status_code=500, detail="Failed to upload avatar")
-    
-#     # Update user with new avatar URL
-#     user_update = UserUpdate(avatar_url=avatar_url)
-#     return user_crud.update_user(db=db, user_id=user_id, user=user_update)
+        # Update the user
+        updated_user = update_user(user_id, user_data)
+
+        # Return the updated user
+        return UserResponse(
+            id=updated_user.id,
+            email=updated_user.email,
+            username=updated_user.username,
+            ground_photo=updated_user.ground_photo,
+            aerial_photo=updated_user.aerial_photo,
+            is_verified=updated_user.is_verified,
+            created_at=updated_user.created_at
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+
+
+@router.put("/api/users/{user_id}/photos", response_model=UserResponse)
+async def update_user_photos(
+        user_id: str = Path(..., title="The ID of the user to update"),
+        ground_photo: Optional[str] = None,
+        aerial_photo: Optional[str] = None
+):
+    """
+    Update a user's photos.
+    This endpoint is specifically for updating photos after upload.
+    """
+    try:
+        # Check if the user exists
+        existing_user = get_user(user_id)
+        if not existing_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Create update data with only the photo fields
+        update_data = UserUpdate(
+            ground_photo=ground_photo,
+            aerial_photo=aerial_photo
+        )
+
+        # Update the user
+        updated_user = update_user(user_id, update_data)
+
+        # Return the updated user
+        return UserResponse(
+            id=updated_user.id,
+            email=updated_user.email,
+            username=updated_user.username,
+            ground_photo=updated_user.ground_photo,
+            aerial_photo=updated_user.aerial_photo,
+            is_verified=updated_user.is_verified,
+            created_at=updated_user.created_at
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Photo update failed: {str(e)}")

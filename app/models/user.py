@@ -1,48 +1,33 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Table, MetaData
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
-
-from app.database import Base
-
-from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional
+from typing import Optional, Dict, Any, List
 from datetime import datetime
-from bson import ObjectId
-from pydantic import BaseModel
-
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from app.database import Base
-from app.models.S3 import S3SignedURLs
-from typing import Optional, Dict, Any
 from enum import Enum
+from pydantic import BaseModel, Field, EmailStr, validator
+from bson import ObjectId
 
+
+# Custom ObjectId field for MongoDB
 class PyObjectId(str):
     @classmethod
     def __get_validators__(cls):
         yield cls.validate
-        
+
     @classmethod
     def validate(cls, v):
         if not isinstance(v, str) and not isinstance(v, ObjectId):
             raise ValueError("Not a valid ObjectId")
         return str(v)
 
-class UserBase(BaseModel):
-    email: EmailStr
-    username: str
-    
-class UserCreate(UserBase):
-    avatar_url: Optional[str] = None
-    
-    
-class VerificationStatusEnum(str, Enum):
-    PENDING = "Pending"
-    VERIFIED = "Verified"
-    REJECTED = "Rejected"
 
-class User(BaseModel):
-    id: int
+# Enum for verification status
+class VerificationStatusEnum(str, Enum):
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+    IN_REVIEW = "in_review"
+
+
+# Base User model for shared attributes
+class UserBase(BaseModel):
     email: EmailStr
     username: str
     ground_photo: Optional[str] = None
@@ -55,61 +40,72 @@ class User(BaseModel):
     notification_preferences: Dict[str, Any] = Field(default_factory=dict)
     carbon_journey: Optional[Dict[str, Any]] = None
     is_verified: bool = False
-    created_at: datetime
+    is_active: bool = True
+
+    class Config:
+        populate_by_name = True
+
+
+# User model for response (with id)
+class UserModel(UserBase):
+    id: PyObjectId = Field(default_factory=PyObjectId)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
-class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
-    username: Optional[str] = None
-    ground_photo: Optional[str] = None
-    aerial_photo: Optional[str] = None
-    avatar_url: Optional[str] = None
-    carbon_score: Optional[float] = None
-    potential_earnings: Optional[str] = None
-    interested_companies: Optional[int] = None
-    verification_status: Optional[VerificationStatusEnum] = None
-    notification_preferences: Optional[Dict[str, Any]] = None
-    carbon_journey: Optional[Dict[str, Any]] = None
-    is_verified: Optional[bool] = None
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {
+            ObjectId: str,
+            datetime: lambda dt: dt.isoformat()
+        }
+        json_schema_extra = {
+            "example": {
+                "_id": "62d7e1eb3c66fe0f0a000001",
+                "email": "user@example.com",
+                "username": "example_user",
+                "ground_photo": "https://storage.example.com/photos/ground123.jpg",
+                "aerial_photo": "https://storage.example.com/photos/aerial123.jpg",
+                "avatar_url": "https://storage.example.com/avatars/user123.jpg",
+                "carbon_score": 78.5,
+                "potential_earnings": "$250-300",
+                "interested_companies": 3,
+                "verification_status": "pending",
+                "notification_preferences": {
+                    "email": True,
+                    "push": False
+                },
+                "carbon_journey": {
+                    "milestones": ["started", "submitted_photos"],
+                    "next_step": "verification"
+                },
+                "is_verified": False,
+                "is_active": True,
+                "created_at": "2023-04-01T12:00:00.000Z",
+                "updated_at": "2023-04-02T14:30:00.000Z"
+            }
+        }
 
-class UserResponseCreation(BaseModel):
-    id: int
-    email: str
-    username: str
-    upload_urls: S3SignedURLs
-    avatar_url: Optional[str] = None
-    carbon_score: float = 0
-    potential_earnings: Optional[str] = None
-    interested_companies: Optional[int] = 0
-    verification_status: str = "Pending"
-    notification_preferences: Optional[dict] = {}
-    carbon_journey: Optional[dict] = None
-    is_verified: bool = False
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    # upload_config: Optional[dict] = {
-    #     "bucket": "qijaniproductsbucket",
-    #     "region": "eu-north-1",
-    #     "allowed_types": ["image/jpeg", "image/png"]
-    # }
 
-class UserResponse(BaseModel):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    email: str
-    username: str
-    ground_photo: Optional[str] = None
-    aerial_photo: Optional[str] = None
-    avatar_url: Optional[str] = None
-    potential_earnings: Optional[str] = None
-    interested_companies: int = 0
-    verification_status: str = "Pending"
-    notification_preferences: dict = {}
-    carbon_journey: Optional[dict] = None
-    is_verified: bool = False
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    upload_config: Optional[dict] = {
-        "bucket": "qijaniproductsbucket",
-        "region": "eu-north-1",
-        "allowed_types": ["image/jpeg", "image/png"]
+
+
+# Function to help convert Pydantic models to MongoDB documents
+def user_helper(user) -> dict:
+    return {
+        "id": str(user["_id"]),
+        "email": user["email"],
+        "username": user["username"],
+        "ground_photo": user.get("ground_photo"),
+        "aerial_photo": user.get("aerial_photo"),
+        "avatar_url": user.get("avatar_url"),
+        "carbon_score": user.get("carbon_score", 0),
+        "potential_earnings": user.get("potential_earnings"),
+        "interested_companies": user.get("interested_companies", 0),
+        "verification_status": user.get("verification_status", "pending"),
+        "notification_preferences": user.get("notification_preferences", {}),
+        "carbon_journey": user.get("carbon_journey"),
+        "is_verified": user.get("is_verified", False),
+        "is_active": user.get("is_active", True),
+        "created_at": user.get("created_at"),
+        "updated_at": user.get("updated_at")
     }
