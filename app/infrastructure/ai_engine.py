@@ -47,7 +47,7 @@ class AIService:
             raise error
 
     @classmethod
-    async def get_complete_response(cls, thread_id: str, message: str) -> AIResponse:
+    async def get_complete_response(cls, thread_id: str, message) -> AIResponse:
         """
         Get a complete response from the assistant without streaming.
         Waits for the full response before returning.
@@ -69,7 +69,7 @@ class AIService:
             run = await cls.client.runs.create(
                 thread_id,
                 assistant["assistant_id"],
-                input=dict(content=message)
+                input=message
             )
 
             # Wait for the run to complete
@@ -94,7 +94,7 @@ class AIService:
         """
         try:
             thread = await cls.create_thread()
-            chat_message = await cls.get_complete_response(thread["thread_id"], message.json())
+            chat_message = await cls.get_complete_response(thread["thread_id"], message)
 
             if cls.is_thread_busy(thread["thread_id"]):
                 return "Thread is busy. Please try again later."
@@ -134,17 +134,8 @@ class AIService:
             return True
 
 
-# Example usage with your test data
-test_data = {
-    "user_id": "xyz",
-    "aerial_key": "20180627_seq_50m_NC.tif",
-    "ground_key": "Maize.jpg"
-}
-
-
 class AIInputData:
     pass
-
 
 
 # Example of how to use with send_message (assuming it's from ai_engine.py)

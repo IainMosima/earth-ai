@@ -17,8 +17,8 @@ services:
             POSTGRES_DB: postgres
             POSTGRES_USER: postgres
             POSTGRES_PASSWORD: postgres
-        volumes:
-            - langgraph-data:/var/lib/postgresql/data
+#        volumes:
+#            - langgraph-data:/var/lib/postgresql/data
         healthcheck:
             test: pg_isready -U postgres
             start_period: 10s
