@@ -1,8 +1,6 @@
 import os
-from datetime import datetime, timezone
 
 import boto3
-from botocore.client import Config
 from dotenv import load_dotenv
 
 from app.requests.S3 import SignedUrlsResponse
@@ -60,6 +58,8 @@ class StorageService:
         return SignedUrlsResponse(
             ground_photo_signed_url=ground_photo_url,
             aerial_photo_signed_url=aerial_photo_url,
+            ground_photo_key=ground_photo_key,
+            aerial_photo_key=aerial_photo_key,
         )
 
 
