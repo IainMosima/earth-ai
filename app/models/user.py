@@ -1,8 +1,9 @@
-from typing import Optional, Dict, Any, List
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, Field, EmailStr, validator
+from typing import Optional, Dict, Any
+
 from bson import ObjectId
+from pydantic import BaseModel, Field, EmailStr
 
 
 # Custom ObjectId field for MongoDB
@@ -27,7 +28,7 @@ class VerificationStatusEnum(str, Enum):
 
 
 # Base User model for shared attributes
-class UserBase(BaseModel):
+class UserBaseDB(BaseModel):
     email: EmailStr
     username: str
     ground_photo: Optional[str] = None
@@ -38,54 +39,17 @@ class UserBase(BaseModel):
     interested_companies: int = 0
     verification_status: VerificationStatusEnum = VerificationStatusEnum.PENDING
     notification_preferences: Dict[str, Any] = Field(default_factory=dict)
-    carbon_journey: Optional[Dict[str, Any]] = None
+    carbon_journey: Optional[Dict[str, Any]] = None,
+    created_at: datetime = Field(default_factory=datetime.utcnow)
     is_verified: bool = False
     is_active: bool = True
 
-    class Config:
-        populate_by_name = True
-
 
 # User model for response (with id)
-class UserModel(UserBase):
+class UserModel(UserBaseDB):
     id: PyObjectId = Field(default_factory=PyObjectId)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
-
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {
-            ObjectId: str,
-            datetime: lambda dt: dt.isoformat()
-        }
-        json_schema_extra = {
-            "example": {
-                "_id": "62d7e1eb3c66fe0f0a000001",
-                "email": "user@example.com",
-                "username": "example_user",
-                "ground_photo": "https://storage.example.com/photos/ground123.jpg",
-                "aerial_photo": "https://storage.example.com/photos/aerial123.jpg",
-                "avatar_url": "https://storage.example.com/avatars/user123.jpg",
-                "carbon_score": 78.5,
-                "potential_earnings": "$250-300",
-                "interested_companies": 3,
-                "verification_status": "pending",
-                "notification_preferences": {
-                    "email": True,
-                    "push": False
-                },
-                "carbon_journey": {
-                    "milestones": ["started", "submitted_photos"],
-                    "next_step": "verification"
-                },
-                "is_verified": False,
-                "is_active": True,
-                "created_at": "2023-04-01T12:00:00.000Z",
-                "updated_at": "2023-04-02T14:30:00.000Z"
-            }
-        }
-
 
 
 

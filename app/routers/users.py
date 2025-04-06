@@ -41,9 +41,6 @@ async def register_user(
         # Generate signed URLs for photo uploads
         try:
             signed_urls = await storage_service.generate_signed_urls(str(created_user["id"]), user.ground_photo_content_type, user.aerial_photo_content_type)
-            print("signed urls", signed_urls)
-            # Convert the SignedUrlsResponse to a dictionary
-
             # Return successful response
             return UserResponseCreation(
                 id=str(created_user["id"]),

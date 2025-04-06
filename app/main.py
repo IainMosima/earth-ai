@@ -8,6 +8,8 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
 import logging
 import asyncio
+
+from app.infrastructure import test_send_message
 from app.routers import users
 from app.db import connect_to_mongo, close_mongo_connection
 
@@ -34,6 +36,9 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_db_client():
     logger.info("🚀 Starting application...")
+
+    await test_send_message()
+
     connection_successful = await connect_to_mongo()
 
     if not connection_successful:

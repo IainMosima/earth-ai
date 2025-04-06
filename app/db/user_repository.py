@@ -1,13 +1,14 @@
 # user_repository.py
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, List
-from fastapi import HTTPException, status
+
 from bson import ObjectId
+from fastapi import HTTPException, status
 from passlib.context import CryptContext
 from pydantic import EmailStr
 
 from app.db.database import connect_to_mongo, db
+from app.models.user import UserBaseDB, VerificationStatusEnum
 from app.requests.user import UserUpdate, UserCreate, UserResponseCreation
 
 # Configure logging
@@ -111,6 +112,22 @@ async def create_user(user_data: UserCreate) -> UserResponseCreation:
             "created_at": datetime.utcnow(),
             "is_active": True
         }
+
+        user_doc = UserBaseDB(
+            email=user_data.email,
+            username=user_data.username,
+            ground_photo="",
+            aerial_photo="",
+            avatar_url=user_data.avatar_url or "",
+            carbon_score=0,
+            potential_earnings=None,
+            interested_companies=0,
+            verification_status=VerificationStatusEnum.PENDING,
+            notification_preferences={},
+            carbon_journey=None,
+            is_verified=False,
+            is_active=True
+        ).model_dump()
 
         # Insert the user
         result = await users_collection.insert_one(user_doc)
