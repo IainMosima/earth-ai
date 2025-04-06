@@ -1,13 +1,13 @@
-from datetime import datetime
-
-from fastapi import APIRouter, HTTPException, Depends, Path
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
 from typing import Optional, List
 
-from app.services.storage_service import storage_service
-from app.requests.user import UserResponseCreation, UserResponse, UserCreate, UserUpdate
+from fastapi import APIRouter, HTTPException, Path
+from fastapi.responses import JSONResponse
+
 from app.db.user_repository import create_user, get_user_by_email, update_user, get_user, get_users, delete_user
+from app.infrastructure.ai_engine import ai_engine
+from app.requests import AIRequest
+from app.requests.user import UserResponseCreation, UserResponse, UserCreate, UserUpdate
+from app.services.s3_service import storage_service
 
 router = APIRouter(tags=["users"])
 
@@ -38,13 +38,17 @@ async def register_user(
         # Create user
         created_user = await create_user(user_dict)
 
-        # Generate signed URLs for photo uploads
+        # Generate signed URLs for photo uploads and thread_ID
         try:
             signed_urls = await storage_service.generate_signed_urls(str(created_user["id"]), user.ground_photo_content_type, user.aerial_photo_content_type)
-            print("signed urls", signed_urls)
-            # Convert the SignedUrlsResponse to a dictionary
+            thread_id = await ai_engine.send_message(AIRequest(
+                user_id=str(created_user["id"]),
+                aerial_key=signed_urls.aerial_photo_key,
+                ground_key=signed_urls.ground_photo_key
+            ))
 
-            # Return successful response
+            await update_user(created_user["id"], UserUpdate(verification_thread_id=thread_id))
+
             return UserResponseCreation(
                 id=str(created_user["id"]),
                 email=created_user["email"],
@@ -52,6 +56,8 @@ async def register_user(
                 created_at=str(created_user["created_at"]),
                 upload_urls=signed_urls
             )
+
+
 
         except Exception as e:
             # Cleanup on failure
